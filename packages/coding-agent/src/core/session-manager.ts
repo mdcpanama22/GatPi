@@ -72,7 +72,10 @@ function ensurePrivateSessionDir(dir: string): string {
 		if (!opened.isDirectory() || !sameFileIdentity(before, opened)) {
 			throw new Error(`Session directory changed while hardening: ${resolvedDir}`);
 		}
-		fchmodSync(fd, PRIVATE_SESSION_DIR_MODE);
+		// Windows does not implement POSIX directory modes; fchmod on a
+		// directory handle fails with EPERM there. The mkdir mode above is
+		// already the best available protection on that platform.
+		if (process.platform !== "win32") fchmodSync(fd, PRIVATE_SESSION_DIR_MODE);
 		const after = lstatSync(resolvedDir);
 		assertExpectedPathType(resolvedDir, after, "directory");
 		if (!sameFileIdentity(after, opened))
