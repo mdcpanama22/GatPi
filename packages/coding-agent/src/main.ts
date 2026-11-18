@@ -139,7 +139,22 @@ async function runAuthLoginCommand(args: string[]): Promise<number> {
 	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
 	applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
 	configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
-	const modelRuntime = await ModelRuntime.create({ allowModelNetwork: false, signal: AbortSignal.timeout(15_000) });
+	// Extensions can register providers (for example multi-login's account aliases).
+	// `pi auth login <alias>` must see them, so build the runtime through the same
+	// service path that flushes pending provider registrations. Fall back to a plain
+	// runtime if extension loading fails, so login still works.
+	let modelRuntime: ModelRuntime;
+	try {
+		const services = await createAgentSessionServices({
+			cwd,
+			agentDir,
+			settingsManager,
+			modelRuntimeSignal: AbortSignal.timeout(15_000),
+		});
+		modelRuntime = services.modelRuntime;
+	} catch {
+		modelRuntime = await ModelRuntime.create({ allowModelNetwork: false, signal: AbortSignal.timeout(15_000) });
+	}
 
 	const controller = new AbortController();
 	const interrupt = () => controller.abort();
